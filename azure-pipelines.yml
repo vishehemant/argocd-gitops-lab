@@ -1,0 +1,31 @@
+# Azure Pipeline for ArgoCD GitOps
+trigger:
+  branches:
+    include:
+    - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+- checkout: self
+  persistCredentials: true
+
+- task: UseNode@1
+  inputs:
+    version: '18.x'
+
+- script: |
+    npm install
+    npm test
+  displayName: 'Run Tests'
+
+- script: |
+    # Update image tag in deployment.yaml
+    sed -i 's|node:18-alpine|node:18-alpine-$(Build.BuildId)|g' apps/nginx/deployment.yaml
+    git config --global user.email "pipeline@azure.com"
+    git config --global user.name "Azure Pipeline"
+    git add .
+    git commit -m "Update image tag to $(Build.BuildId)"
+    git push origin main
+  displayName: 'Update Manifests and Push to Git'

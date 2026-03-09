@@ -65,9 +65,12 @@ argocd-gitops-lab/
 │   └── overlays/
 │       ├── dev/kustomization.yaml # Dev environment tweaks
 │       └── prod/kustomization.yaml # Prod environment tweaks
-├── argocd-config.yaml             # ArgoCD global config
-├── README.md                      # This file
-└── .gitignore                     # Git ignore rules
+├── vault/                     # HashiCorp Vault configurations
+│   └── vault-agent-config.yaml # Vault Agent config for secret injection
+├── azure-pipelines.yml         # Azure Pipelines CI/CD configuration
+├── argocd-config.yaml          # ArgoCD global config
+├── README.md                   # This file
+└── .gitignore                  # Git ignore rules
 ```
 
 ## Quick Start Guide
@@ -75,7 +78,7 @@ Follow these steps to deploy and learn:
 
 ### 1. Clone and Setup
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/vishehemant/argocd-gitops-lab.git
 cd argocd-gitops-lab
 ```
 
@@ -144,4 +147,18 @@ kubectl port-forward svc/argocd-server -n argocd 8080:443
 - [GitOps Guide](https://www.gitops.tech/)
 - [Kubernetes Docs](https://kubernetes.io/docs/)
 
-This lab provides a complete, runnable environment for mastering ArgoCD and GitOps. Start with basic deployments, then explore rollouts and monitoring. Happy learning!
+## Integrating HashiCorp Vault for Secrets Management
+To add secrets management:
+1. **Install Vault**: Deploy Vault in your cluster or use external Vault.
+2. **Configure Vault Agent**: Use the config in `vault/vault-agent-config.yaml` to inject secrets.
+3. **Annotate Pods**: Add `vault.hashicorp.com/agent-inject: "true"` to your deployment for secret injection.
+4. **ArgoCD Sync**: Include Vault configs in your ArgoCD Applications.
+
+## Integrating Azure Pipelines for CI/CD
+To add CI/CD:
+1. **Create Pipeline**: Use `azure-pipelines.yml` in your Azure DevOps repo.
+2. **Triggers**: Pipeline runs on main branch pushes, runs tests, updates manifests, and pushes back to Git.
+3. **ArgoCD Integration**: Pipeline commits trigger ArgoCD auto-sync.
+4. **Secure Tokens**: Use Azure service connections for Git access.
+
+This extends your GitOps lab with secure secrets and automated deployments.
