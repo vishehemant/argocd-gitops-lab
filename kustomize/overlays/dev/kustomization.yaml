@@ -1,0 +1,20 @@
+resources:
+  - ../../apps/nginx/deployment.yaml
+  - ../../apps/nginx/service.yaml
+  - ../../apps/nginx/rollout.yaml
+  - ../../apps/prometheus/deployment.yaml
+  - ../../apps/prometheus/service.yaml
+  - ../../apps/prometheus/configmap.yaml
+  - ../../rollouts/canary-rollout.yaml
+  - ../../rollouts/blue-green-rollout.yaml
+  - ../../monitoring/prometheus/prometheus.yaml
+  - ../../monitoring/prometheus/rules.yaml
+  - ../../monitoring/grafana/dashboard.yaml
+  - ../../monitoring/grafana/datasource.yaml
+
+patchesStrategicMerge:
+  - patch.yaml
+
+configurations:
+  - ../../argocd/applications/nginx-app.yaml
+  - ../../argocd/applications/prometheus-app.yaml

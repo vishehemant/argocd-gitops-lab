@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard
+data:
+  dashboard.json: |
+    {
+      "dashboard": {
+        "title": "Node.js Metrics",
+        "panels": [
+          {
+            "title": "CPU Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(container_cpu_usage_seconds_total{pod=~\"nodejs-demo.*\"}[5m])",
+                "legendFormat": "{{pod}}"
+              }
+            ]
+          }
+        ]
+      }
+    }
