@@ -6,7 +6,7 @@ metadata:
 data:
   repositories: |
     - type: git
-      url: https://github.com/your-repo/argocd-gitops-lab.git
+      url: https://github.com/vishehemant/argocd-gitops-lab.git
       name: argocd-gitops-lab
       username: your-username
       password: your-password
