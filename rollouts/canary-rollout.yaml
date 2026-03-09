@@ -35,23 +35,6 @@ spec:
           - -e
           - |
             require('http')
-              .createServer((req,res)=>res.end("Hello from NodeJS Rollout"))
-              .listen(3000)
-        ports:
-        - containerPort: 3000
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 3000
-          initialDelaySeconds: 5
-          periodSeconds: 10
-      - name: nodejs-canary
-        image: node:19-alpine
-        command: ["node"]
-        args:
-          - -e
-          - |
-            require('http')
               .createServer((req,res)=>res.end("Hello from NodeJS Canary"))
               .listen(3000)
         ports:
