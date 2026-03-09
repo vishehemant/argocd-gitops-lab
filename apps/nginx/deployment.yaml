@@ -46,7 +46,7 @@ spec:
         fsGroup: 1000
       containers:
       - name: nodejs
-        image: node:20-alpine
+        image: node:18-alpine
         imagePullPolicy: IfNotPresent
         command: ["node"]
         args:
