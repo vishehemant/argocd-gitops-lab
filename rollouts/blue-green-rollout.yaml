@@ -31,6 +31,13 @@ spec:
       containers:
       - name: nodejs
         image: node:18-alpine
+        command: ["node"]
+        args:
+          - -e
+          - |
+            require('http')
+              .createServer((req,res)=>res.end("Hello from NodeJS Blue-Green"))
+              .listen(3000)
         ports:
         - containerPort: 3000
   revisionHistoryLimit: 10

@@ -48,6 +48,13 @@ spec:
       - name: nodejs
         image: node:18-alpine
         imagePullPolicy: IfNotPresent
+        command: ["node"]
+        args:
+          - -e
+          - |
+            require('http')
+              .createServer((req,res)=>res.end("Hello from NodeJS Rollout"))
+              .listen(3000)
         ports:
         - containerPort: 3000
           name: http
@@ -61,7 +68,7 @@ spec:
             memory: 256Mi
         livenessProbe:
           httpGet:
-            path: /health
+            path: /
             port: 3000
           initialDelaySeconds: 30
           periodSeconds: 10
@@ -69,7 +76,7 @@ spec:
           failureThreshold: 3
         readinessProbe:
           httpGet:
-            path: /health
+            path: /
             port: 3000
           initialDelaySeconds: 5
           periodSeconds: 5
