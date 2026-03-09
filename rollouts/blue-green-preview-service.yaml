@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodejs-preview
+  labels:
+    app.kubernetes.io/name: nodejs-demo
+    app.kubernetes.io/version: "18"
+    app.kubernetes.io/component: webapp
+    app.kubernetes.io/part-of: argocd-gitops-lab
+spec:
+  selector:
+    app.kubernetes.io/name: nodejs-demo
+    rollouts-pod-template-hash: preview  # Argo Rollouts adds this label to preview pods
+  ports:
+  - port: 3000
+    targetPort: 3000
+    name: http
+  type: ClusterIP
