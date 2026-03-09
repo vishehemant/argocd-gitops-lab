@@ -14,9 +14,6 @@ spec:
       activeService: nodejs-active
       previewService: nodejs-preview
       autoPromotionEnabled: false
-      steps:
-      - setWeight: 100
-      - pause: {}
   selector:
     matchLabels:
       app.kubernetes.io/name: nodejs-demo
