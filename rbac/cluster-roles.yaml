@@ -1,0 +1,72 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: argocd-gitops-app-reader
+  labels:
+    app.kubernetes.io/part-of: argocd-gitops-lab
+rules:
+# Allow reading pods, services, deployments
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+  verbs: ["get", "list", "watch"]
+# Allow reading events
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["get", "list", "watch"]
+# Allow reading configmaps and secrets for referenced configs
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: argocd-gitops-app-admin
+  labels:
+    app.kubernetes.io/part-of: argocd-gitops-lab
+rules:
+# Full access to workloads in argocd-gitops-* namespaces
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets", "endpoints"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Argo Rollouts resources
+- apiGroups: ["argoproj.io"]
+  resources: ["rollouts", "analysisruns", "experiments"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+# Allow reading events
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-rbac
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: argocd-gitops-lab
+rules:
+- apiGroups: [""]
+  resources:
+  - nodes
+  - nodes/proxy
+  - services
+  - endpoints
+  - pods
+  verbs: ["get", "list", "watch"]
+- apiGroups:
+  - extensions
+  resources:
+  - ingresses
+  verbs: ["get", "list", "watch"]
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]

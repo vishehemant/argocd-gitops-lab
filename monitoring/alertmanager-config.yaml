@@ -1,0 +1,146 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+      slack_api_url: '${SLACK_WEBHOOK_URL}'  # Set via secret
+      pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+    # Templates for notifications
+    templates:
+      - '/etc/alertmanager/templates/*.tmpl'
+
+    # Root route
+    route:
+      receiver: 'default-receiver'
+      group_by: ['alertname', 'cluster', 'severity']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 12h
+
+      # Severity-based routing
+      routes:
+        # Critical alerts to PagerDuty
+        - match:
+            severity: critical
+          receiver: 'pagerduty-critical'
+          group_wait: 0s
+          repeat_interval: 5m
+
+        # Warning alerts to Slack
+        - match:
+            severity: warning
+          receiver: 'slack-warnings'
+          group_wait: 1m
+          repeat_interval: 1h
+
+        # ArgoCD-specific alerts
+        - match:
+            component: argocd
+          receiver: 'slack-argocd'
+          continue: true
+
+        # Kubernetes-specific alerts
+        - match:
+            component: kubernetes
+          receiver: 'slack-kubernetes'
+          continue: true
+
+        # Security-related alerts
+        - match:
+            security: 'true'
+          receiver: 'security-team'
+          group_wait: 0s
+
+    # Receivers
+    receivers:
+      - name: 'default-receiver'
+        slack_configs:
+          - channel: '#alerts'
+            title: 'Alert: {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+            send_resolved: true
+
+      - name: 'pagerduty-critical'
+        pagerduty_configs:
+          - service_key: '${PAGERDUTY_SERVICE_KEY}'
+            description: '{{ .GroupLabels.alertname }}: {{ .Alerts.Firing | len }} firing'
+            details:
+              severity: 'critical'
+              cluster: '{{ .GroupLabels.cluster }}'
+
+      - name: 'slack-warnings'
+        slack_configs:
+          - channel: '#alerts-warnings'
+            title: '⚠️ Warning: {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+            send_resolved: true
+            color: 'warning'
+
+      - name: 'slack-argocd'
+        slack_configs:
+          - channel: '#argocd-alerts'
+            title: '🚀 ArgoCD: {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+            send_resolved: true
+
+      - name: 'slack-kubernetes'
+        slack_configs:
+          - channel: '#kubernetes-alerts'
+            title: '☸️ Kubernetes: {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+            send_resolved: true
+
+      - name: 'security-team'
+        slack_configs:
+          - channel: '#security-alerts'
+            title: '🔒 SECURITY: {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+            send_resolved: true
+        email_configs:
+          - to: 'security-team@company.com'
+            from: 'alertmanager@company.com'
+            smarthost: 'smtp.gmail.com:587'
+            auth_username: '${SMTP_USERNAME}'
+            auth_password: '${SMTP_PASSWORD}'
+            headers:
+              Subject: 'SECURITY ALERT: {{ .GroupLabels.alertname }}'
+
+    # Inhibition rules
+    inhibit_rules:
+      # Don't alert on warning if the same alert is critical
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'cluster']
+
+      # Don't alert if cluster is down
+      - source_match:
+          alertname: 'KubernetesClusterDown'
+        target_match_re:
+          alertname: 'Kubernetes.*'
+        equal: ['cluster']
+
+      # Don't alert on pod issues if node is down
+      - source_match:
+          alertname: 'KubernetesNodeNotReady'
+        target_match_re:
+          alertname: 'KubernetesPod.*'
+        equal: ['kubernetes_node']
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-secrets
+  namespace: monitoring
+type: Opaque
+stringData:
+  slack_webhook_url: '${SLACK_WEBHOOK_URL}'
+  pagerduty_service_key: '${PAGERDUTY_SERVICE_KEY}'
+  smtp_username: '${SMTP_USERNAME}'
+  smtp_password: '${SMTP_PASSWORD}'

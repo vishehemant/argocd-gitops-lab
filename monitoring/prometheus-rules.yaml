@@ -1,0 +1,364 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: argocd-alerts
+  namespace: argocd
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: argocd.rules
+    interval: 30s
+    rules:
+    # ============================================
+    # Application Sync Status Alerts
+    # ============================================
+    
+    - alert: ArgoCDAppSyncFailed
+      expr: argocd_app_info{sync_status="Failed"} > 0
+      for: 5m
+      labels:
+        severity: critical
+        component: argocd
+      annotations:
+        summary: "ArgoCD Application Sync Failed"
+        description: "Application {{ $labels.name }} in project {{ $labels.project }} has failed to sync. Manual intervention required."
+        dashboard: "http://argocd-dashboard:3000/app/{{ $labels.name }}"
+
+    - alert: ArgoCDAppOutOfSync
+      expr: argocd_app_info{sync_status="OutOfSync"} > 0
+      for: 10m
+      labels:
+        severity: warning
+        component: argocd
+      annotations:
+        summary: "ArgoCD Application Out of Sync"
+        description: "Application {{ $labels.name }} is out of sync for more than 10 minutes. Expected state does not match actual state."
+        runbook: "https://wiki.company.com/runbooks/argocd-outofsync"
+
+    - alert: ArgoCDAppHealthDegraded
+      expr: argocd_app_info{health_status!="Healthy"} > 0
+      for: 5m
+      labels:
+        severity: warning
+        component: argocd
+      annotations:
+        summary: "ArgoCD Application Health Degraded"
+        description: "Application {{ $labels.name }} health status is {{ $labels.health_status }}. Check application resources."
+
+    # ============================================
+    # ArgoCD Controller & Server Alerts
+    # ============================================
+
+    - alert: ArgoCDApplicationControllerDown
+      expr: up{job="argocd-application-controller"} == 0
+      for: 5m
+      labels:
+        severity: critical
+        component: argocd
+      annotations:
+        summary: "ArgoCD Application Controller Down"
+        description: "ArgoCD Application Controller is not responding. Pod may be crashed."
+        action: "kubectl logs -n argocd -l app.kubernetes.io/name=argocd-application-controller"
+
+    - alert: ArgoCDServerDown
+      expr: up{job="argocd-server"} == 0
+      for: 5m
+      labels:
+        severity: critical
+        component: argocd
+      annotations:
+        summary: "ArgoCD Server Down"
+        description: "ArgoCD Server is unable to respond. ArgoCD UI and API are unavailable."
+        action: "kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-server"
+
+    - alert: ArgoCDRepositoryServerDown
+      expr: up{job="argocd-repo-server"} == 0
+      for: 5m
+      labels:
+        severity: critical
+        component: argocd
+      annotations:
+        summary: "ArgoCD Repository Server Down"
+        description: "ArgoCD Repository Server is not responding. Applications cannot sync."
+        action: "kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-repo-server"
+
+    # ============================================
+    # Repository & Connectivity Alerts
+    # ============================================
+
+    - alert: ArgoCDRepositoryUnreachable
+      expr: argocd_git_request_total{request_type="fetch"} == 0
+      for: 5m
+      labels:
+        severity: warning
+        component: argocd
+      annotations:
+        summary: "ArgoCD Repository Unreachable"
+        description: "ArgoCD cannot reach Git repository {{ $labels.repo }}. Check network connectivity and credentials."
+
+    - alert: ArgoCDRepositoryAuthFailed
+      expr: increase(argocd_git_request_failed_total[5m]) > 0
+      labels:
+        severity: warning
+        component: argocd
+      annotations:
+        summary: "ArgoCD Repository Authentication Failed"
+        description: "Failed to authenticate with repository {{ $labels.repo }}. Check credentials and permissions."
+
+    # ============================================
+    # Sync Performance Alerts
+    # ============================================
+
+    - alert: ArgoCDSyncSlow
+      expr: histogram_quantile(0.95, rate(argocd_app_reconcile_duration_seconds[5m])) > 300
+      for: 10m
+      labels:
+        severity: warning
+        component: argocd
+      annotations:
+        summary: "ArgoCD Application Sync is Slow"
+        description: "Application {{ $labels.name }} sync is taking more than 5 minutes (p95: {{ $value }}s). Check repository size and cluster capacity."
+
+    - alert: ArgoCDSyncReconciliationError
+      expr: increase(argocd_app_reconcile_error_total[5m]) > 0
+      labels:
+        severity: warning
+        component: argocd
+      annotations:
+        summary: "ArgoCD Application Reconciliation Error"
+        description: "Application {{ $labels.name }} reconciliation failed. Check ArgoCD controller logs."
+
+    # ============================================
+    # Resource & Performance Alerts
+    # ============================================
+
+    - alert: ArgoCDServerMemoryHigh
+      expr: container_memory_usage_bytes{pod=~"argocd-server-.*"} / container_spec_memory_limit_bytes > 0.85
+      for: 5m
+      labels:
+        severity: warning
+        component: argocd
+      annotations:
+        summary: "ArgoCD Server Memory Usage High"
+        description: "ArgoCD Server memory usage is {{ $value | humanizePercentage }} of limit. Consider increasing memory allocation."
+
+    - alert: ArgoCDServerCPUHigh
+      expr: rate(container_cpu_usage_seconds_total{pod=~"argocd-server-.*"}[5m]) > 0.8
+      for: 10m
+      labels:
+        severity: warning
+        component: argocd
+      annotations:
+        summary: "ArgoCD Server CPU Usage High"
+        description: "ArgoCD Server CPU usage is high. Check for sync storms or stuck operations."
+
+    # ============================================
+    # Server API Alerts
+    # ============================================
+
+    - alert: ArgoCDServerHighErrorRate
+      expr: rate(argocd_server_requests_total{status=~"5.."}[5m]) > 0.05
+      for: 5m
+      labels:
+        severity: warning
+        component: argocd
+      annotations:
+        summary: "ArgoCD Server High Error Rate"
+        description: "ArgoCD Server error rate is {{ $value | humanizePercentage }}. Check server logs for details."
+        action: "kubectl logs -n argocd -l app.kubernetes.io/name=argocd-server --tail=100"
+
+    - alert: ArgoCDServerRequestLatencyHigh
+      expr: histogram_quantile(0.99, rate(argocd_server_request_duration_seconds[5m])) > 2
+      for: 5m
+      labels:
+        severity: warning
+        component: argocd
+      annotations:
+        summary: "ArgoCD Server Request Latency High"
+        description: "ArgoCD Server request latency is {{ $value }}s. Check cluster resources and network."
+
+    # ============================================
+    # RBAC & Authorization Alerts
+    # ============================================
+
+    - alert: ArgoCDUnauthorizedAccessAttempt
+      expr: increase(argocd_server_auth_decision_total{decision="deny"}[5m]) > 10
+      labels:
+        severity: warning
+        component: argocd
+        security: true
+      annotations:
+        summary: "ArgoCD Unauthorized Access Attempts"
+        description: "Multiple unauthorized access attempts detected. Check access logs for suspicious activity."
+        action: "kubectl logs -n argocd -l app.kubernetes.io/name=argocd-server -c argocd-server | grep 'unauthorized'"
+
+    # ============================================
+    # Webhook & Notification Alerts
+    # ============================================
+
+    - alert: ArgoCDWebhookDeliveryFailed
+      expr: increase(argocd_webhook_event_total{result="failed"}[5m]) > 0
+      labels:
+        severity: warning
+        component: argocd
+      annotations:
+        summary: "ArgoCD Webhook Delivery Failed"
+        description: "Failed to deliver webhook to {{ $labels.destination }}. Check webhook configuration."
+
+    # ============================================
+    # Application-Level Alerts
+    # ============================================
+
+    - alert: ArgoCDNoApplicationsManaged
+      expr: count(argocd_app_info) == 0
+      for: 10m
+      labels:
+        severity: warning
+        component: argocd
+      annotations:
+        summary: "No Applications Managed by ArgoCD"
+        description: "ArgoCD is not managing any applications. Check if applications are created."
+
+    - alert: ArgoCDApplicationNotReconciled
+      expr: time() - argocd_app_info{last_successful_sync=~".+"} > 86400
+      for: 1h
+      labels:
+        severity: warning
+        component: argocd
+      annotations:
+        summary: "ArgoCD Application Not Reconciled"
+        description: "Application {{ $labels.name }} has not been successfully synced in the last 24 hours. Manual sync may be required."
+
+    # ============================================
+    # Cluster Connectivity Alerts
+    # ============================================
+
+    - alert: ArgoCDClusterUnreachable
+      expr: argocd_app_info{connection_status="Unknown"} > 0
+      for: 5m
+      labels:
+        severity: critical
+        component: argocd
+      annotations:
+        summary: "ArgoCD Cannot Reach Destination Cluster"
+        description: "ArgoCD cannot reach cluster {{ $labels.dest_server }}. Check cluster connectivity and certificate validity."
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: argocd-application-alerts
+  namespace: argocd
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: argocd-applications.rules
+    interval: 30s
+    rules:
+    # ============================================
+    # Deployment Status Alerts
+    # ============================================
+
+    - alert: KubernetesPodRestartingTooOften
+      expr: rate(kube_pod_container_status_restarts_total{pod=~".*-.*"}[5m]) > 0.1
+      for: 5m
+      labels:
+        severity: warning
+        component: kubernetes
+      annotations:
+        summary: "Kubernetes Pod Restarting Too Often"
+        description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is restarting frequently. Check pod logs."
+
+    - alert: KubernetesPodNotHealthy
+      expr: min_by(namespace, pod) (kube_pod_status_phase{phase=~"Pending|Unknown|Failed"}) == 1
+      for: 10m
+      labels:
+        severity: warning
+        component: kubernetes
+      annotations:
+        summary: "Kubernetes Pod Not Healthy"
+        description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is in {{ $labels.phase }} phase."
+
+    - alert: KubernetesDeploymentReplicasMismatch
+      expr: kube_deployment_spec_replicas{} != kube_deployment_status_replicas_available{}
+      for: 10m
+      labels:
+        severity: warning
+        component: kubernetes
+      annotations:
+        summary: "Kubernetes Deployment Replicas Mismatch"
+        description: "Deployment {{ $labels.deployment }} has {{ $value }} unavailable replicas."
+
+    - alert: KubernetesStatefulsetReplicasMismatch
+      expr: kube_statefulset_status_replicas_ready{} != kube_statefulset_status_replicas{}
+      for: 10m
+      labels:
+        severity: warning
+        component: kubernetes
+      annotations:
+        summary: "Kubernetes StatefulSet Replicas Mismatch"
+        description: "StatefulSet {{ $labels.statefulset }} has replicas mismatch."
+
+    # ============================================
+    # Resource Utilization Alerts
+    # ============================================
+
+    - alert: KubernetesPodMemoryUsageHigh
+      expr: |
+        (sum(container_memory_usage_bytes{pod!=""}) by (namespace, pod) / sum(container_spec_memory_limit_bytes{pod!=""}) by (namespace, pod)) > 0.85
+      for: 5m
+      labels:
+        severity: warning
+        component: kubernetes
+      annotations:
+        summary: "Kubernetes Pod Memory Usage High"
+        description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} memory usage is {{ $value | humanizePercentage }}."
+
+    - alert: KubernetesPodCPUUsageHigh
+      expr: |
+        (sum(rate(container_cpu_usage_seconds_total{pod!=""}[5m])) by (namespace, pod) / sum(container_spec_cpu_quota{pod!=""}) by (namespace, pod)) * 100 > 80
+      for: 10m
+      labels:
+        severity: warning
+        component: kubernetes
+      annotations:
+        summary: "Kubernetes Pod CPU Usage High"
+        description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} CPU usage is {{ $value | humanizePercentage }}."
+
+    # ============================================
+    # Node Alerts
+    # ============================================
+
+    - alert: KubernetesNodeNotReady
+      expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+      for: 5m
+      labels:
+        severity: critical
+        component: kubernetes
+      annotations:
+        summary: "Kubernetes Node Not Ready"
+        description: "Kubernetes node {{ $labels.node }} is not ready. Check node status and logs."
+
+    - alert: KubernetesNodeDiskPressure
+      expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+      for: 5m
+      labels:
+        severity: critical
+        component: kubernetes
+      annotations:
+        summary: "Kubernetes Node Disk Pressure"
+        description: "Kubernetes node {{ $labels.node }} has disk pressure. Critical storage issue detected."
+
+    - alert: KubernetesNodeMemoryPressure
+      expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
+      for: 5m
+      labels:
+        severity: critical
+        component: kubernetes
+      annotations:
+        summary: "Kubernetes Node Memory Pressure"
+        description: "Kubernetes node {{ $labels.node }} has memory pressure."
